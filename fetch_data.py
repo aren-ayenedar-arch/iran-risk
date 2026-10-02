@@ -27,14 +27,22 @@ def stooq(sym):
         t = get("https://stooq.com/q/d/l/?s=%s&i=d" % q)
         return float(list(csv.DictReader(io.StringIO(t)))[-1]["Close"])
 
-def first_ok(*fns):
-    err = None
-    for f in fns:
+def fred(series):
+    rows = list(csv.reader(io.StringIO(get("https://fred.stlouisfed.org/graph/fredgraph.csv?id=" + series))))[1:]
+    for r in reversed(rows):
+        if len(r) > 1 and r[1] not in (".", ""):
+            return float(r[1])
+    raise ValueError("no data")
+
+SRC = {}
+def first_ok(name, *pairs):
+    errs = []
+    for label, f in pairs:
         try:
-            return f()
+            v = f(); SRC[name] = label; return v
         except Exception as e:
-            err = e
-    raise err
+            errs.append("%s: %s" % (label, str(e)[:50]))
+    raise RuntimeError(" | ".join(errs))
 
 def gdelt_ratio():
     q = urllib.parse.quote("Iran (attack OR strike OR missile OR tanker OR Hormuz)")
@@ -52,11 +60,14 @@ vals = {}
 raw = dict(old.get("raw", {}))
 status = {}
 
-for key, fn in [("brent", lambda: first_ok(lambda: yahoo("BZ=F"), lambda: stooq("cb.f"))), ("vix", lambda: first_ok(lambda: yahoo("^VIX"), lambda: stooq("^vix"))), ("news", gdelt_ratio)]:
+for key, fn in [
+    ("brent", lambda: first_ok("brent", ("yahoo", lambda: yahoo("BZ=F")), ("fred", lambda: fred("DCOILBRENTEU")), ("stooq", lambda: stooq("cb.f")))),
+    ("vix", lambda: first_ok("vix", ("yahoo", lambda: yahoo("^VIX")), ("fred", lambda: fred("VIXCLS")), ("stooq", lambda: stooq("^vix")))),
+    ("news", gdelt_ratio)]:
     try:
         raw[key] = fn(); status[key] = "ok"
     except Exception as e:
-        status[key] = "خطا: %s" % str(e)[:60]
+        status[key] = "خطا: %s" % str(e)[:220]
 
 if "brent" in raw: vals["brent"] = round(clamp((raw["brent"] - 60) / 60 * 100))
 if "vix" in raw:   vals["vix"]   = round(clamp((raw["vix"] - 12) / 28 * 100))
@@ -78,7 +89,7 @@ for n, b, s in H:
 now = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
 hist = old.get("history", [])
 hist.append([now, probs["w"]["p"], probs["m"]["p"], probs["q"]["p"]])
-json.dump({"updated": now, "values": vals, "raw": raw, "status": status, "probs": probs,
+json.dump({"updated": now, "values": vals, "raw": raw, "status": status, "sources": SRC, "probs": probs,
            "manual_note": manual.get("note", ""), "history": hist[-300:]},
           open("data.json", "w", encoding="utf-8"), ensure_ascii=False)
 print("done", status)
