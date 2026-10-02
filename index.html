@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>شاخص ریسک جنگ ایران (زنده)</title>
+<style>
+:root{--bg:#f6f5f2;--card:#fff;--tx:#1a1a1a;--mu:#6b6b6b;--bd:#e2e0da;--red:#d92d20;--amb:#f79009;--grn:#12b76a}
+@media(prefers-color-scheme:dark){:root{--bg:#111214;--card:#1b1c1f;--tx:#eee;--mu:#9a9a9a;--bd:#2c2d31}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font-family:Tahoma,system-ui,sans-serif;line-height:1.6;padding:14px;max-width:720px;margin-inline:auto}
+h1{font-size:19px;margin:4px 0}h2{font-size:15px;margin:0 0 8px}.mu{color:var(--mu);font-size:12px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px;margin:12px 0}
+#alert{display:none;background:var(--red);color:#fff;border-radius:14px;padding:12px;font-weight:700;text-align:center;animation:p 1.2s infinite}
+@keyframes p{50%{opacity:.7}}
+.hr{display:flex;justify-content:space-between;align-items:baseline;margin-top:12px}.pct{font-size:26px;font-weight:800}
+.bar{position:relative;height:16px;border-radius:8px;direction:ltr;overflow:hidden;background:linear-gradient(to right,var(--grn) 0,var(--amb) 60%,var(--amb) 89.5%,var(--red) 90%)}
+.m{position:absolute;top:0;bottom:0;width:4px;background:var(--tx)}.iv{position:absolute;top:5px;height:6px;background:rgba(0,0,0,.35);border-radius:3px}
+.zone{background:rgba(217,45,32,.12);border:1px dashed var(--red);border-radius:8px;padding:4px 8px;font-size:12px;color:var(--red);margin-top:4px}
+.f{display:flex;justify-content:space-between;font-size:13px;padding:3px 0;border-bottom:1px solid var(--bd)}
+canvas{width:100%;height:90px}#warn{color:var(--red);font-size:13px}
+</style></head><body>
+<h1>شاخص احتمال جنگ دوباره با ایران</h1>
+<div class="mu">احتمال از سرگیری حملات گسترده · به‌روزرسانی خودکار هر چند دقیقه</div>
+<div id="alert">⚠️ ناحیه قرمز: احتمال بالای ۹۰٪</div>
+<div id="warn"></div>
+<div class="card" id="hz">در حال بارگذاری…</div>
+<div class="card"><h2>روند احتمال یک ماهه</h2><canvas id="cv" width="640" height="180"></canvas></div>
+<div class="card"><h2>شاخص‌ها</h2><div id="fs"></div><div class="mu" id="meta"></div></div>
+<div class="card mu">مدل لجستیک وزنی با پارامترهای قضاوتی، نه برازش‌شده روی داده برچسب‌خورده؛ کالیبراسیون آماری واقعی ممکن نیست. بازه خاکستری عدم‌قطعیت پارامترها است. توصیه مالی یا امنیتی نیست.</div>
+<script>
+const N={brent:"قیمت نفت برنت (خودکار)",vix:"استرس بازار VIX (خودکار)",inc:"شدت خبر درگیری و حملات (خودکار از GDELT)",hormuz:"اختلال تنگه هرمز (دستی)",force:"استقرار نظامی (دستی)",dip:"بن‌بست دیپلماسی (دستی)",cal:"تقویم سیاسی (دستی)"};
+const L={w:"یک هفتهٔ آینده",m:"یک ماه آینده",q:"سه ماه آینده"},pc=x=>Math.round(x*100);
+async function load(){
+ try{
+  const d=await (await fetch("data.json?"+Date.now())).json(),P=d.probs;
+  document.getElementById("hz").innerHTML="<h2>احتمال از سرگیری جنگ</h2>"+["w","m","q"].map(k=>{const r=P[k];return `<div class="hr"><span>${L[k]}</span><span class="pct" style="color:${r.p>=.9?'var(--red)':'inherit'}">${pc(r.p)}٪</span></div><div class="bar"><div class="iv" style="left:${r.lo*100}%;width:${(r.hi-r.lo)*100}%"></div><div class="m" style="left:calc(${r.p*100}% - 2px)"></div></div><div class="mu">بازه ≈ ${pc(r.lo)}–${pc(r.hi)}٪</div>${r.p>=.9?'<div class="zone">ناحیهٔ قرمز (≥ ۹۰٪)</div>':''}`}).join("");
+  document.getElementById("alert").style.display=Object.values(P).some(r=>r.p>=.9)?"block":"none";
+  document.getElementById("fs").innerHTML=Object.keys(N).map(k=>`<div class="f"><span>${N[k]}</span><b>${d.values[k]}</b></div>`).join("");
+  const age=(Date.now()-new Date(d.updated))/60000,bad=Object.entries(d.status).filter(([,v])=>v!="ok");
+  document.getElementById("warn").textContent=age>60?"⚠️ داده بیش از یک ساعت قدیمی است.":(bad.length?"⚠️ بعضی منابع خطا دادند و آخرین مقدار قبلی استفاده شده: "+bad.map(b=>b[0]).join("، "):"");
+  document.getElementById("meta").textContent="آخرین به‌روزرسانی: "+new Date(d.updated).toLocaleString("fa-IR")+" · "+d.manual_note;
+  draw(d.history.map(h=>h[2]));
+ }catch(e){document.getElementById("hz").textContent="هنوز data.json ساخته نشده. در GitHub بخش Actions را اجرا کنید."}
+}
+function draw(h){const c=document.getElementById("cv"),g=c.getContext("2d"),w=c.width,H=c.height;g.clearRect(0,0,w,H);
+ g.fillStyle="rgba(217,45,32,.15)";g.fillRect(0,0,w,H*.1);g.strokeStyle="#888";g.beginPath();
+ h.forEach((p,i)=>{const x=h.length<2?w/2:i*(w-10)/(h.length-1)+5,y=H-p*H;i?g.lineTo(x,y):g.moveTo(x,y)});g.stroke()}
+load();setInterval(load,60000);
+</script></body></html>
